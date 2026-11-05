@@ -7,9 +7,8 @@
  * status: data type according to the shop system
  * delivery_ and billing_: _firstname, _lastname, _company, _street, _postcode, _city, _countrycode
  * products: an Array of item numbers
- * @version 1.7.8-gambio
+ * @version 1.7.9-gambio
  */
-
 class Komfortkasse_Order
 {
 
@@ -19,7 +18,7 @@ class Komfortkasse_Order
         $ret = array ();
 
         if (Komfortkasse_Config::getConfig(Komfortkasse_Config::status_open) != '' && Komfortkasse_Config::getConfig(Komfortkasse_Config::payment_methods) != '') {
-            $sql = "select orders_id from " . TABLE_ORDERS . " where orders_status in (" . Komfortkasse_Config::getConfig(Komfortkasse_Config::status_open) . ") and ( ";
+            $sql = "select orders_id, payment_method from " . TABLE_ORDERS . " where orders_status in (" . Komfortkasse_Config::getConfig(Komfortkasse_Config::status_open) . ") and ( ";
             $paycodes = preg_split('/,/', Komfortkasse_Config::getConfig(Komfortkasse_Config::payment_methods));
             for($i = 0; $i < count($paycodes); $i++) {
                 $sql .= " payment_method like '" . $paycodes [$i] . "' ";
@@ -31,7 +30,15 @@ class Komfortkasse_Order
             $orders_q = xtc_db_query($sql);
 
             while ( $orders_a = xtc_db_fetch_array($orders_q) ) {
-                $ret [] = $orders_a ['orders_id'];
+                if ($orders_a ['payment_method'] == 'mobile_payment') {
+                    // Shopgate
+                    $shopgate = self::getShopgateOrder($orders_a ['orders_id']);
+                    if ($shopgate && self::isShopgateMerchantPayment($shopgate ['payment_infos'])) {
+                        $ret [] = $orders_a ['orders_id'];
+                    }
+                } else {
+                    $ret [] = $orders_a ['orders_id'];
+                }
             }
         }
 
@@ -74,6 +81,33 @@ class Komfortkasse_Order
     }
 
 
+    // called by Komfortkasse::notifyorder() in addition to the status check
+    public static function isOpen($order)
+    {
+        if ($order ['payment_method'] == 'mobile_payment') {
+            // Shopgate: only orders paid directly to the merchant
+            return isset($order ['shopgate_payment_infos']) && self::isShopgateMerchantPayment($order ['shopgate_payment_infos']);
+        }
+        return true;
+
+    }
+
+
+    private static function getShopgateOrder($orders_id)
+    {
+        $shopgate_q = xtc_db_query("SELECT shopgate_order_number, payment_infos FROM orders_shopgate_order WHERE orders_id=" . (int) $orders_id);
+        return xtc_db_fetch_array($shopgate_q);
+
+    }
+
+
+    private static function isShopgateMerchantPayment($payment_infos)
+    {
+        return $payment_infos && strpos($payment_infos, 'erchant payment') !== false;
+
+    }
+
+
     public static function getOrder($number)
     {
         require_once DIR_WS_CLASSES . 'order.php';
@@ -87,7 +121,7 @@ class Komfortkasse_Order
         $total_a = xtc_db_fetch_array($total_q);
         $total = $total_a ['value'];
 
-        $lang_q = xtc_db_query("SELECT l.code, o.gm_orders_code, o.orders_status FROM " . TABLE_ORDERS . " o join " . TABLE_LANGUAGES . " l on l.directory=o.language where o.orders_id=" . $number);
+        $lang_q = xtc_db_query("SELECT l.code, o.gm_orders_code, o.orders_status, o.payment_class FROM " . TABLE_ORDERS . " o join " . TABLE_LANGUAGES . " l on l.directory=o.language where o.orders_id=" . $number);
         $lang_a = xtc_db_fetch_array($lang_q);
         $lang = $lang_a ['code'];
 
@@ -117,16 +151,27 @@ class Komfortkasse_Order
         $ret ['billing_city'] = $order->billing ['city'];
         $ret ['billing_countrycode'] = $order->billing ['country_iso_2'];
         $ret ['status'] = $lang_a ['orders_status'];
+        $ret ['comment'] = $order->info ['comments'];
+        $ret ['payment_class'] = $lang_a ['payment_class']; // not provided by order::query()
+
+        if ($ret ['payment_method'] == 'mobile_payment') {
+            // Shopgate
+            $shopgate = self::getShopgateOrder($number);
+            if ($shopgate) {
+                $ret ['marketplace_number'] = $shopgate ['shopgate_order_number'];
+                $ret ['shopgate_payment_infos'] = $shopgate ['payment_infos'];
+            }
+        }
 
         // Rechnungsnummer und -datum
-        $invoice_date_q = xtc_db_query("SELECT date_added FROM " . TABLE_ORDERS_STATUS_HISTORY . " WHERE orders_id=" . $number ." AND orders_status_id = 149 ORDER BY orders_status_history_id");
+        $invoice_date_q = xtc_db_query("SELECT date_added FROM " . TABLE_ORDERS_STATUS_HISTORY . " WHERE orders_id=" . $number . " AND orders_status_id = 149 ORDER BY orders_status_history_id");
         $i = 0;
         while ( $invoice_a = xtc_db_fetch_array($invoice_date_q) ) {
-        	if($i == 0){
-	        	$invoicedate = explode(' ',$invoice_a ['date_added']);
-	        	$ret ['invoice_date'] = date('d.m.Y', strtotime($invoicedate[0]));
-        	}
-        	$i++;
+            if ($i == 0) {
+                $invoicedate = explode(' ', $invoice_a ['date_added']);
+                $ret ['invoice_date'] = date('d.m.Y', strtotime($invoicedate [0]));
+            }
+            $i++;
         }
 
         $order_products = $order->products;
@@ -155,17 +200,18 @@ class Komfortkasse_Order
     }
 
 
-
     public static function getInvoicePdfPrepare()
     {
         global $kkdir;
         $kkdir = getcwd();
         chdir('../../admin');
         define('SUPPRESS_REDIRECT', true);
-        require_once('includes/application_top.php');
+        require_once ('includes/application_top.php');
+
     }
 
-    public static function getInvoicePdf($invoicenumber, $order_id=null)
+
+    public static function getInvoicePdf($invoicenumber, $order_id = null)
     {
         if ($order_id == null) {
             $order_q = xtc_db_query("SELECT o.orders_id, l.code as languages_code, l.languages_id, o.language FROM " . TABLE_ORDERS . " o join " . TABLE_LANGUAGES . " l on l.directory=o.language where o.gm_orders_code='" . $invoicenumber . "'");
@@ -177,15 +223,15 @@ class Komfortkasse_Order
         }
 
         if ($order_id) {
-            $_GET['oID'] = $order_id;
-            $_GET['type'] = 'invoice';
+            $_GET ['oID'] = $order_id;
+            $_GET ['type'] = 'invoice';
 
-            $coo_lang_file_master = MainFactory::create_object('LanguageTextManager', array(), true);
-            @$coo_lang_file_master->init_section('lang/'.$order_a['language'].'/admin/gm_pdf_order.php', $order_a['languages_id']);
-            $_SESSION['language_code'] = $order_a['languages_code'];
-            $_SESSION['language'] = $order_a['language'];
-            $_SESSION['languages_id'] = $order_a['languages_id'];
-            require(DIR_FS_LANGUAGES . $_SESSION['language'] . '/' . $_SESSION['language'] . '.php');
+            $coo_lang_file_master = MainFactory::create_object('LanguageTextManager', array (), true);
+            @$coo_lang_file_master->init_section('lang/' . $order_a ['language'] . '/admin/gm_pdf_order.php', $order_a ['languages_id']);
+            $_SESSION ['language_code'] = $order_a ['languages_code'];
+            $_SESSION ['language'] = $order_a ['language'];
+            $_SESSION ['languages_id'] = $order_a ['languages_id'];
+            require (DIR_FS_LANGUAGES . $_SESSION ['language'] . '/' . $_SESSION ['language'] . '.php');
 
             global $kkdir;
             chdir($kkdir);
