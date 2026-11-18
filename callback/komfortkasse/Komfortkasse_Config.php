@@ -4,7 +4,7 @@
  * Komfortkasse
  * Config Class
  *
- * @version 1.7.7-gambio
+ * @version 1.7.10-gambio
  */
 class Komfortkasse_Config {
 	const activate_export = 'KOMFORTKASSE_ACTIVATE_EXPORT';
@@ -51,10 +51,12 @@ class Komfortkasse_Config {
 		return self::$cache [$constant_key];
 	}
 	public static function getRequestParameter($key) {
-		if ($_POST [$key])
-			return urldecode($_POST [$key]);
-		else
-			return urldecode($_GET [$key]);
+		// POST wins if set and non-empty (as before); missing keys and arrays give ''
+		// instead of PHP 8 warnings / TypeErrors
+		$value = !empty($_POST [$key]) ? $_POST [$key] : (isset($_GET [$key]) ? $_GET [$key] : '');
+		if (!is_string($value))
+			return '';
+		return urldecode($value);
 	}
 
 	public static function getVersion() {

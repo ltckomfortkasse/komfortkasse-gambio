@@ -3,7 +3,7 @@
  * Komfortkasse
  * routing
  *
- * @version 1.7.7-gambio
+ * @version 1.7.10-gambio
  */
 
 ini_set('default_charset', 'utf-8');
@@ -24,6 +24,20 @@ include_once 'Komfortkasse.php';
 
 
 $action = Komfortkasse_Config::getRequestParameter('action');
+
+// Only the actions Komfortkasse calls; never dispatch to arbitrary public methods.
+$allowedActions = array (
+        'init',
+        'test',
+        'readorders',
+        'updateorders',
+        'info',
+        'readinvoicepdf'
+);
+if (!is_string($action) || !in_array($action, $allowedActions, true)) {
+    header('HTTP/1.1 400 Bad Request');
+    exit();
+}
 
 $kk = new Komfortkasse();
 $kk->$action();

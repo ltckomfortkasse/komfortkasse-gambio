@@ -7,10 +7,40 @@
  * status: data type according to the shop system
  * delivery_ and billing_: _firstname, _lastname, _company, _street, _postcode, _city, _countrycode
  * products: an Array of item numbers
- * @version 1.7.9-gambio
+ * @version 1.7.10-gambio
  */
 class Komfortkasse_Order
 {
+
+    // comma separated config value -> trimmed, non-empty parts
+    private static function csvParts($csv)
+    {
+        $parts = array ();
+        foreach (explode(',', str_replace('"', '', (string) $csv)) as $part) {
+            $part = trim($part);
+            if ($part !== '') {
+                $parts [] = $part;
+            }
+        }
+        return $parts;
+    }
+
+    // order status IDs for an SQL IN clause, cast to int
+    private static function intList($csv)
+    {
+        $ids = array_map('intval', self::csvParts($csv));
+        return empty($ids) ? '0' : implode(',', $ids);
+    }
+
+    // "payment_method like '...' or ..." with escaped payment codes
+    private static function paymentLike($csv)
+    {
+        $likes = array ();
+        foreach (self::csvParts($csv) as $code) {
+            $likes [] = " payment_method like '" . xtc_db_input($code) . "' ";
+        }
+        return empty($likes) ? '0' : implode(' or ', $likes);
+    }
 
     // return all order numbers that are "open" and relevant for transfer to kk
     public static function getOpenIDs()
@@ -18,14 +48,8 @@ class Komfortkasse_Order
         $ret = array ();
 
         if (Komfortkasse_Config::getConfig(Komfortkasse_Config::status_open) != '' && Komfortkasse_Config::getConfig(Komfortkasse_Config::payment_methods) != '') {
-            $sql = "select orders_id, payment_method from " . TABLE_ORDERS . " where orders_status in (" . Komfortkasse_Config::getConfig(Komfortkasse_Config::status_open) . ") and ( ";
-            $paycodes = preg_split('/,/', Komfortkasse_Config::getConfig(Komfortkasse_Config::payment_methods));
-            for($i = 0; $i < count($paycodes); $i++) {
-                $sql .= " payment_method like '" . $paycodes [$i] . "' ";
-                if ($i < count($paycodes) - 1) {
-                    $sql .= " or ";
-                }
-            }
+            $sql = "select orders_id, payment_method from " . TABLE_ORDERS . " where orders_status in (" . self::intList(Komfortkasse_Config::getConfig(Komfortkasse_Config::status_open)) . ") and ( ";
+            $sql .= self::paymentLike(Komfortkasse_Config::getConfig(Komfortkasse_Config::payment_methods));
             $sql .= " )";
             $orders_q = xtc_db_query($sql);
 
@@ -43,14 +67,8 @@ class Komfortkasse_Order
         }
 
         if (Komfortkasse_Config::getConfig(Komfortkasse_Config::status_open_invoice) != '' && Komfortkasse_Config::getConfig(Komfortkasse_Config::payment_methods_invoice) != '') {
-            $sql = "select orders_id from " . TABLE_ORDERS . " where orders_status in (" . Komfortkasse_Config::getConfig(Komfortkasse_Config::status_open_invoice) . ") and ( ";
-            $paycodes = preg_split('/,/', Komfortkasse_Config::getConfig(Komfortkasse_Config::payment_methods_invoice));
-            for($i = 0; $i < count($paycodes); $i++) {
-                $sql .= " payment_method like '" . $paycodes [$i] . "' ";
-                if ($i < count($paycodes) - 1) {
-                    $sql .= " or ";
-                }
-            }
+            $sql = "select orders_id from " . TABLE_ORDERS . " where orders_status in (" . self::intList(Komfortkasse_Config::getConfig(Komfortkasse_Config::status_open_invoice)) . ") and ( ";
+            $sql .= self::paymentLike(Komfortkasse_Config::getConfig(Komfortkasse_Config::payment_methods_invoice));
             $sql .= " )";
             $orders_q = xtc_db_query($sql);
 
@@ -60,14 +78,8 @@ class Komfortkasse_Order
         }
 
         if (Komfortkasse_Config::getConfig(Komfortkasse_Config::status_open_cod) != '' && Komfortkasse_Config::getConfig(Komfortkasse_Config::payment_methods_cod) != '') {
-            $sql = "select orders_id from " . TABLE_ORDERS . " where orders_status in (" . Komfortkasse_Config::getConfig(Komfortkasse_Config::status_open_cod) . ") and ( ";
-            $paycodes = preg_split('/,/', Komfortkasse_Config::getConfig(Komfortkasse_Config::payment_methods_cod));
-            for($i = 0; $i < count($paycodes); $i++) {
-                $sql .= " payment_method like '" . $paycodes [$i] . "' ";
-                if ($i < count($paycodes) - 1) {
-                    $sql .= " or ";
-                }
-            }
+            $sql = "select orders_id from " . TABLE_ORDERS . " where orders_status in (" . self::intList(Komfortkasse_Config::getConfig(Komfortkasse_Config::status_open_cod)) . ") and ( ";
+            $sql .= self::paymentLike(Komfortkasse_Config::getConfig(Komfortkasse_Config::payment_methods_cod));
             $sql .= " )";
             $orders_q = xtc_db_query($sql);
 
@@ -110,18 +122,24 @@ class Komfortkasse_Order
 
     public static function getOrder($number)
     {
-        require_once DIR_WS_CLASSES . 'order.php';
-
-        $order = new order($number);
-        if (empty($number) || empty($order)) {
+        // order numbers are numeric orders_id values; anything else is not an order of this shop
+        $number = trim((string) $number);
+        if ($number === '' || !preg_match('/^[0-9]+$/', $number)) {
             return null;
         }
 
-        $total_q = xtc_db_query("SELECT value FROM " . TABLE_ORDERS_TOTAL . " where orders_id=" . $number . " and class='ot_total'");
+        require_once DIR_WS_CLASSES . 'order.php';
+
+        $order = new order((int) $number);
+        if (empty($order)) {
+            return null;
+        }
+
+        $total_q = xtc_db_query("SELECT value FROM " . TABLE_ORDERS_TOTAL . " where orders_id=" . (int) $number . " and class='ot_total'");
         $total_a = xtc_db_fetch_array($total_q);
         $total = $total_a ['value'];
 
-        $lang_q = xtc_db_query("SELECT l.code, o.gm_orders_code, o.orders_status, o.payment_class FROM " . TABLE_ORDERS . " o join " . TABLE_LANGUAGES . " l on l.directory=o.language where o.orders_id=" . $number);
+        $lang_q = xtc_db_query("SELECT l.code, o.gm_orders_code, o.orders_status, o.payment_class FROM " . TABLE_ORDERS . " o join " . TABLE_LANGUAGES . " l on l.directory=o.language where o.orders_id=" . (int) $number);
         $lang_a = xtc_db_fetch_array($lang_q);
         $lang = $lang_a ['code'];
 
@@ -164,7 +182,7 @@ class Komfortkasse_Order
         }
 
         // Rechnungsnummer und -datum
-        $invoice_date_q = xtc_db_query("SELECT date_added FROM " . TABLE_ORDERS_STATUS_HISTORY . " WHERE orders_id=" . $number . " AND orders_status_id = 149 ORDER BY orders_status_history_id");
+        $invoice_date_q = xtc_db_query("SELECT date_added FROM " . TABLE_ORDERS_STATUS_HISTORY . " WHERE orders_id=" . (int) $number . " AND orders_status_id = 149 ORDER BY orders_status_history_id");
         $i = 0;
         while ( $invoice_a = xtc_db_fetch_array($invoice_date_q) ) {
             if ($i == 0) {
@@ -195,7 +213,7 @@ class Komfortkasse_Order
     public static function updateOrder($order, $status, $callbackid)
     {
         xtc_db_query("update " . TABLE_ORDERS . " set orders_status = '" . xtc_db_input($status) . "', last_modified = now() where orders_id = '" . xtc_db_input($order ['number']) . "'");
-        xtc_db_query("insert into " . TABLE_ORDERS_STATUS_HISTORY . " (orders_id, orders_status_id, date_added, customer_notified, comments) values ('" . xtc_db_input($order ['number']) . "', '" . xtc_db_input($status) . "', now(), '0', 'Komfortkasse ID " . $callbackid . "')");
+        xtc_db_query("insert into " . TABLE_ORDERS_STATUS_HISTORY . " (orders_id, orders_status_id, date_added, customer_notified, comments) values ('" . xtc_db_input($order ['number']) . "', '" . xtc_db_input($status) . "', now(), '0', 'Komfortkasse ID " . xtc_db_input($callbackid) . "')");
 
     }
 
@@ -214,11 +232,11 @@ class Komfortkasse_Order
     public static function getInvoicePdf($invoicenumber, $order_id = null)
     {
         if ($order_id == null) {
-            $order_q = xtc_db_query("SELECT o.orders_id, l.code as languages_code, l.languages_id, o.language FROM " . TABLE_ORDERS . " o join " . TABLE_LANGUAGES . " l on l.directory=o.language where o.gm_orders_code='" . $invoicenumber . "'");
+            $order_q = xtc_db_query("SELECT o.orders_id, l.code as languages_code, l.languages_id, o.language FROM " . TABLE_ORDERS . " o join " . TABLE_LANGUAGES . " l on l.directory=o.language where o.gm_orders_code='" . xtc_db_input($invoicenumber) . "'");
             $order_a = xtc_db_fetch_array($order_q);
             $order_id = $order_a ['orders_id'];
         } else {
-            $order_q = xtc_db_query("SELECT o.orders_id, l.code as languages_code, l.languages_id, o.language FROM " . TABLE_ORDERS . " o join " . TABLE_LANGUAGES . " l on l.directory=o.language where o.orders_id='" . $order_id . "'");
+            $order_q = xtc_db_query("SELECT o.orders_id, l.code as languages_code, l.languages_id, o.language FROM " . TABLE_ORDERS . " o join " . TABLE_LANGUAGES . " l on l.directory=o.language where o.orders_id=" . (int) $order_id);
             $order_a = xtc_db_fetch_array($order_q);
         }
 
