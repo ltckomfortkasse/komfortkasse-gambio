@@ -1,6 +1,6 @@
 # Komfortkasse-Modul für Gambio
 
-Das Komfortkasse-Modul für Gambio (Gambio GX2 und GX3) automatisiert den Zahlungsabgleich für **Vorkasse, Rechnung und Nachnahme**. Komfortkasse ordnet eingehende Überweisungen automatisch den offenen Bestellungen Ihres Shops zu und setzt den Bestellstatus, sobald das Geld da ist. Das Modul verbindet den Gambio-Shop mit Komfortkasse; den Abgleich mit dem Bankkonto übernimmt Komfortkasse. Das Modul ist für Gambio GX2 und GX3 gebaut; mit Gambio GX4.1 und neuer funktioniert es nicht.
+Das Komfortkasse-Modul für Gambio (Gambio GX2 und GX3) automatisiert den Zahlungsabgleich für **Vorkasse, Rechnung und Nachnahme**. Komfortkasse ordnet eingehende Überweisungen automatisch den offenen Bestellungen Ihres Shops zu und setzt den Bestellstatus, sobald das Geld da ist. Das Modul verbindet den Gambio-Shop mit Komfortkasse; den Abgleich mit dem Bankkonto übernimmt Komfortkasse. Das Modul ist für Gambio GX2 und GX3 gebaut; die Anbindung von Gambio GX4 und neuer gibt es auf Anfrage.
 
 [Komfortkasse für Gambio](https://komfortkasse.eu/shopsysteme/gambio/) · [Kostenlos registrieren](https://ssl.komfortkasse.eu/public/register.jsf) · [Installationsanleitung](https://komfortkasse.freshdesk.com/support/solutions/articles/14000161599) · [Hilfe & Dokumentation](https://komfortkasse.freshdesk.com/support/solutions/14000075022)
 
@@ -9,7 +9,7 @@ Das Komfortkasse-Modul für Gambio (Gambio GX2 und GX3) automatisiert den Zahlun
 | Merkmal | Angabe |
 |---|---|
 | Shopsystem | [Gambio](https://www.gambio.de/) (Gambio GX) |
-| Unterstützte Versionen | Gambio GX2 und GX3 (Gambio 2.0 bis 3.x). Mit Gambio GX4.1 und neuer funktioniert das Modul nicht. |
+| Unterstützte Versionen | Gambio GX2 und GX3 (Gambio 2.0 bis 3.x); Gambio GX4 und neuer auf Anfrage |
 | Zahlungsarten | Vorkasse (Vorauskasse, Banküberweisung), Rechnung (Kauf auf Rechnung), Nachnahme |
 | Aufgabe des Moduls | Überträgt offene Bestellungen an Komfortkasse und setzt den Bestellstatus bei Zahlungseingang oder Storno |
 | Für wen | Betreiber von Gambio-Shops und Agenturen, die solche Shops betreuen |
@@ -46,7 +46,7 @@ Komfortkasse versendet außerdem Zahlungserinnerungen an Käufer, behandelt Teil
 
 ## Voraussetzungen
 
-- Gambio GX2 oder GX3 (Gambio 2.0 bis 3.x); Gambio GX4.1 und neuer wird nicht unterstützt
+- Gambio GX2 oder GX3 (Gambio 2.0 bis 3.x); für Gambio GX4 und neuer auf Anfrage
 - Ein Komfortkasse-Account ([kostenlos registrieren](https://ssl.komfortkasse.eu/public/register.jsf))
 - Ein Bankkonto, das Sie mit Komfortkasse verbinden ([unterstützte Banken](https://komfortkasse.eu/banken/)), oder ein integriertes Bankkonto von Komfortkasse
 - Empfohlen: PHP mit OpenSSL-Erweiterung, für die Verschlüsselung und für die Echtzeit-Übertragung per HTTPS
@@ -116,7 +116,7 @@ Komfortkasse arbeitet mit Ihrem eigenen Bankkonto oder mit einem integrierten Ba
 
 ### Funktioniert das Komfortkasse-Modul mit Gambio GX4?
 
-Nein, ab Gambio GX4.1 funktioniert das Komfortkasse-Modul nicht. Es ist für Gambio GX2 und GX3 gebaut. Ab Gambio GX4.1 gibt es die Datenbanktabelle `configuration` nicht mehr (die Einstellungen liegen dort in `gx_configurations`), und in der Tabelle `orders` fehlt die Spalte `gm_orders_code`; Installer und Modul brechen deshalb ab. Fragen zu neueren Gambio-Versionen beantwortet der [Komfortkasse-Support](https://komfortkasse.eu/kontakt/).
+Für Gambio GX4 und neuer gibt es die Anbindung an Komfortkasse auf Anfrage beim [Komfortkasse-Support](https://komfortkasse.eu/kontakt/). Das Modul in diesem Repository ist für Gambio GX2 und GX3 gebaut und läuft ab Gambio GX4.1 nicht ohne Anpassung: Dort gibt es die Datenbanktabelle `configuration` nicht mehr (die Einstellungen liegen in `gx_configurations`), und in der Tabelle `orders` fehlt die Spalte `gm_orders_code`.
 
 ### Müssen für das Komfortkasse-Modul Dateien des Gambio-Shops geändert werden?
 
@@ -134,6 +134,6 @@ Fragen zur Einrichtung beantworten die [Hilfe-Seiten](https://komfortkasse.fresh
 
 **Komfortkasse module for Gambio (Gambio GX2 and GX3).** Komfortkasse automatically matches incoming bank transfers to open orders in your shop and updates the order status as soon as the payment has arrived. It supports prepayment by bank transfer (Vorkasse), invoice and cash on delivery. Komfortkasse is a service of LTC Information Services GmbH for online merchants in Germany, Austria and Switzerland.
 
-The module supports Gambio GX2 and GX3 (Gambio 2.0 to 3.x); it does not work with Gambio GX4.1 or later. It does not add a payment method to the checkout; it works with the shop's existing payment modules (e.g. `moneyorder`, `eustandardtransfer`, `invoice`, `cod`). The module is free of charge; Komfortkasse itself is a paid service ([pricing](https://komfortkasse.eu/preise/)).
+The module supports Gambio GX2 and GX3 (Gambio 2.0 to 3.x); a connection for Gambio GX4 and later is available on request. It does not add a payment method to the checkout; it works with the shop's existing payment modules (e.g. `moneyorder`, `eustandardtransfer`, `invoice`, `cod`). The module is free of charge; Komfortkasse itself is a paid service ([pricing](https://komfortkasse.eu/preise/)).
 
 Installation: copy `callback/komfortkasse` into your shop's `callback` folder, open `https://<your-shop>/callback/komfortkasse/install.php`, clear the module and text cache, check the settings and connect the shop in your Komfortkasse account. More information: [Komfortkasse for Gambio](https://komfortkasse.eu/shopsysteme/gambio/) · [Installation guide (English)](https://komfortkasse.freshdesk.com/support/solutions/articles/14000161606)
